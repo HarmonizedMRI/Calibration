@@ -131,10 +131,11 @@ fprintf('TR = %.3f ms\n', toppe.getTRtime(1, 2, sys.ge)*1e3);
 
 %% Create 'sequence stamp' file for TOPPE
 % This file is listed in line 6 of toppeN.entry
-toppe.preflightcheck('toppe50.entry', 'seqstamp.txt', sys.ge);
+toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sys.ge);
+
 
 %% Write files to tar archive (for convenience).
-system('tar cf b0.tar toppe50.entry modules.txt scanloop.txt *.mod seqstamp.txt');
+system('tar cf b0.tar toppeN.entry modules.txt scanloop.txt *.mod seqstamp.txt');
 
 % Play sequence in loop (movie) mode
 %nModulesPerTR = 2;
