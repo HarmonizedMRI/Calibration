@@ -50,18 +50,16 @@ fclose(fid);
 
 % excitation module
 [ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, ex.slThick, ...
-        ex.tbw, ex.dur, nz*nCyclesSpoil, sys, ...
-        'ftype', ex.ftype, ...
-        'spoilDerate', 0.5, ...
-        'ofname', mods.ex);
+    ex.tbw, ex.dur, nz*nCyclesSpoil, sys, ...
+    'ftype', ex.ftype, ...
+    'spoilDerate', 0.5, ...
+    'ofname', mods.ex);
 
 % readout module
 % Here we use the helper function 'makegre' to do that, but
 % that's not a requirement.
 % Reduce slew to keep PNS in normal mode (<80% of limit)
-systmp = sys;
-systmp.maxSlew = 15;
-toppe.utils.makegre(FOV(1), N(1), voxSize(3), systmp, ... 
+toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ... 
     'ofname', mods.readout, ...
     'ncycles', nCyclesSpoil); 
 
@@ -112,8 +110,6 @@ fprintf('TR = %.3f ms\n', toppe.getTRtime(1, 2, sys)*1e3);
 
 figure; toppe.plotseq(1, 4, sys);
 
-return
-
 
 %% Create 'sequence stamp' file for TOPPE
 % This file is listed in line 6 of toppeN.entry
@@ -121,7 +117,7 @@ toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sys);
 
 
 %% Write files to tar archive (for convenience).
-system('tar cf b0.tar toppeN.entry modules.txt scanloop.txt *.mod seqstamp.txt');
+system('tar cf b0.tar toppeN.entry seqstamp.txt scanloop.txt modules.txt *.mod');
 
 % Play sequence in loop (movie) mode
 %nModulesPerTR = 2;
