@@ -1,49 +1,108 @@
-function b1(seq)
-% Create segmented EPI (or spin warp) bSSFP scans
+function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
+% function blochsiegert4ge(sys, N, FOV, tr, [etl, Ry, isFlyback, isRampsamp, bsFreq)
+%
+% 3D FLASH segmented EPI (or spin warp) Bloch-Siegert B1+ mapping sequence.
+%
+% The following parameters are hard-coded:
+%  Fermi function pulse shape of amplitude 0.05 Gauss
+%  imaging flip angle 15 deg
+%
+% Inputs:
+%  sys          struct   scanner hardware settings. See toppe.systemspecs().
+%  N            [1 3]    matrix size
+%  FOV          [1 3]    field of view (cm)
+%  nShots       [1 1]    number of EPI shots (segments)
+%  tr           [1 1]    sequence TR (ms)
+% 
+% Input options (keyword-value arguments):
+%  bsFreq       [1 (>=2)]    Bloch-Siegert pulse frequency offsets (Hz). 
+%                        Default: [-4000 4000]
+%  Ry           [1 1]    EPI undersampling factor. Default: 1
+%  flyback      bool     Flyback EPI? Default: true
+%  rampsamp     bool     Ramp sampling? Default: false
+%  decimation   int      Design EPI readout as if ADC dwell time is 4us*decimation.
+%                        Default: 1
+%                        Applies only to readouts w/o ramp sampling.
+%                        (The actual ADC dwell time is fixed to 4us in TOPPE)
 
-%% Get sequence parameters and define file names
+%% Parse input options
+arg.bsFreq = [-4000 4000];  % Hz
+arg.Ry = 1;
+arg.flyback = true;
+arg.rampsamp = false;
+arg.decimation = 1;
 
-nscans = numel(seq.bs.freq);
+% Substitute varargin values as appropriate and check inputs
+arg = toppe.utils.vararg_pair(arg, varargin);
 
-nx = seq.matrix(1);
-ny = seq.matrix(2);
-nz = seq.matrix(3);
 
-moduleListFile = 'modules.txt';
-% loopFile = 'scanloop.txt'; % this is the default name, so no need to define it
+%% Set sequence parameters and define file names
+
+flip = 15;             % low flip angle for spin-density weighting
+slThick = 0.8*FOV(3);  % slab thickness
+
+% excitation (imaging) pulse
+ex.tbw = 8;           % time-bandwidth product of SLR pulse 
+ex.dur = 3;           % pulse duration (ms)
+ex.ftype = 'min';     
+
+% Fermi pulse
+bs.amp = 0.05;            % Amplitude of Fermi pulse (Gauss)
+
+nScans = numel(arg.bsFreq);
+
+ny = N(2);
+nz = N(3);
+
+% .mod file names
 mods.ex         = 'ex.mod';    % does not contain the rephasing gradient lobe
-mods.bs         = 'bs.mod';
-mods.exRephaser = 'ex-rephaser.mod';
-mods.readout    = seq.mods.readout;
-mods.prephaser  = seq.mods.prephaser;
+mods.bs         = 'bs.mod';    % BS pulse (inserted between ex.mod and ex-rephaser.mod)
+mods.exRephaser = 'ex-rephaser.mod';  % slice-select rephaser
+mods.prephaser  = 'prephaser.mod';  % for EPI readout
+mods.readout    = 'readout.mod';    % EPI echo-train
 
-
-%% Write modules.txt
-fid = fopen(moduleListFile, 'wt');
+fid = fopen('modules.txt', 'wt');
 fprintf(fid, 'Total number of unique cores\n');
 fprintf(fid, '%d\n', length(fieldnames(mods)));
 fprintf(fid, 'fname  duration(us)    hasRF?  hasDAQ?\n');
 fprintf(fid, '%s\t0\t1\t0\n', mods.ex);
 fprintf(fid, '%s\t0\t1\t0\n', mods.bs);
 fprintf(fid, '%s\t0\t0\t0\n', mods.exRephaser);
-fprintf(fid, '%s\t0\t0\t1\n', mods.readout);
 fprintf(fid, '%s\t0\t0\t0\n', mods.prephaser);
+fprintf(fid, '%s\t0\t0\t1\n', mods.readout);
 fclose(fid);
 
 
 %% Create .mod files 
-%% Create imaging and excitation modules (we'll reuse readout.mod from the bssfp scan)
+
+% Create readout.mod and prephaser.mod
+[gx,gy,gz] = toppe.utils.makeepi(FOV, N, ...
+    nShots, sys, ...
+    'flyback', arg.flyback, ...
+    'rampsamp', arg.rampsamp, ...
+    'Ry', arg.Ry, ...
+    'writefiles', true); 
+
+% echo spacing (ms)
+tsamp = sys.raster*1e3;   % gradient sample time (ms)
+if arg.flyback
+    es = tsamp * (numel(gx.echo) + numel(gx.flyback));
+else
+    es = tsamp * numel(gx.echo);
+end
+if nShots == N(2)
+    es = 0;
+end
+
 % imaging excitation pulse
 nCyclesSpoil = 4*nz;  % unbalanced gradients
-[ex.rf, ex.g] = toppe.utils.rf.makeslr(seq.bs.flip, seq.rf.slThick, ...
-        seq.rf.tbw, seq.rf.dur, nCyclesSpoil, seq.sys, ...
-        'ftype', seq.rf.ftype, ...
+[ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, slThick, ...
+        ex.tbw, ex.dur, nCyclesSpoil, sys, ...
+        'ftype', ex.ftype, ...
         'spoilDerate', 0.5, ...
-        'sliceOffset', seq.sliceOffset, ...
         'writeModFile', false);
 
-% Split off gradient rephaser lobe,
-% and write to separate .mod files
+% Split off gradient rephaser lobe, and write to separate .mod files
 I = 4 + find(ex.g(5:end) < 0);
 irep = I(1);    % start of rephaser lobe
 ex.gex = [ex.g(1:(irep-1))];
@@ -53,68 +112,68 @@ ex.rf = toppe.makeGElength(ex.rf(1:length(ex.gex)));
 ex.gex = toppe.makeGElength(ex.gex);
 ex.rephaser = toppe.makeGElength(ex.rephaser);
 
-toppe.writemod(seq.sys, 'rf', ex.rf, 'gz', ex.gex, ...
+toppe.writemod(sys, 'rf', ex.rf, 'gz', ex.gex, ...
     'ofname', mods.ex);
 
-toppe.writemod(seq.sys, 'gz', ex.rephaser, ...
+toppe.writemod(sys, 'gz', ex.rephaser, ...
     'ofname', mods.exRephaser);
 
 % Bloch-Siegert module
-toppe.utils.rf.makebs(seq.bs.amp, 'system', seq.sys, 'ofname', mods.bs);
+toppe.utils.rf.makebs(bs.amp, 'system', sys, 'ofname', mods.bs);
+
+return;
 
 
 %% Get min TR so we can calculate textra (to achieve desired TR)
 % We do this by building one TR
-toppe.write2loop('setup', seq.sys);
-toppe.write2loop(mods.ex, seq.sys);
-toppe.write2loop(mods.bs, seq.sys);
-toppe.write2loop(mods.exRephaser, seq.sys);
-toppe.write2loop(mods.prephaser, seq.sys);
-toppe.write2loop(mods.readout, seq.sys);
-toppe.write2loop(mods.prephaser, seq.sys);
-toppe.write2loop('finish', seq.sys);
+toppe.write2loop('setup', sp.sys);
+toppe.write2loop(mods.ex, sp.sys);
+toppe.write2loop(mods.bs, sp.sys);
+toppe.write2loop(mods.exRephaser, sp.sys);
+toppe.write2loop(mods.prephaser, sp.sys);
+toppe.write2loop(mods.readout, sp.sys);
+toppe.write2loop(mods.prephaser, sp.sys);
+toppe.write2loop('finish', sp.sys);
 
-trmin = (seq.nshots-1)/seq.nshots*seq.es + toppe.getTRtime(1, 6, seq.sys)*1e3;  % ms
+trmin = (sp.nshots-1)/sp.nshots*sp.es + toppe.getTRtime(1, 6, sp.sys)*1e3;  % ms
 
 
 %% Write scanloop.txt
-ny = seq.matrix(2);
-nz = seq.matrix(3);
 
 rfphs = 0;    % radians
 rf_spoil_seed_cnt = 0;
 rf_spoil_seed = 117;
 
-toppe.write2loop('setup', seq.sys);
-for iim = 1:nscans
+toppe.write2loop('setup', sp.sys);
+for iim = 1:nScans
     for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
-        for iy = 1:seq.nshots
+        for iy = 1:sp.nshots
             % y/z phase-encode amplitudes, scaled to (-1,1)
             a_gy = -(iz>0)*((iy-1+0.5)-ny/2)/(ny/2);
             a_gz = -(iz>0)*((iz-1+0.5)-nz/2)/(nz/2);   
 
             % rf excitation, bloch-siegert pulse, and slice rephaser
-            toppe.write2loop(mods.ex, seq.sys, ...
+            toppe.write2loop(mods.ex, sp.sys, ...
                 'RFphase', rfphs);
-            toppe.write2loop(mods.bs, seq.sys, ...
-                'RFoffset', seq.bs.freq(iim));
-            toppe.write2loop(mods.exRephaser, seq.sys, ...
-                'textra', (iy-1)/seq.nshots*seq.es);
+            toppe.write2loop(mods.bs, sp.sys, ...
+                'RFoffset', sp.bs.freq(iim));
+            toppe.write2loop(mods.exRephaser, sp.sys, ...
+                'textra', (iy-1)/sp.nshots*sp.es);
 
             % prephase (move to corner of kspace)
-            toppe.write2loop(mods.prephaser, seq.sys, ...
+            toppe.write2loop(mods.prephaser, sp.sys, ...
                 'Gamplitude', [1 a_gy a_gz]');
 
             % readout. Data is stored in 'slice', 'echo', and 'view' indeces.
-            toppe.write2loop(mods.readout, seq.sys, ...
+            toppe.write2loop(mods.readout, sp.sys, ...
                 'DAQphase', rfphs, ...
                 'slice', iim, 'echo', max(iz,1), 'view', iy, ...
-                'textra', seq.es - iy/seq.nshots*seq.es, ...
+                'textra', sp.es - iy/sp.nshots*sp.es, ...
                 'dabmode', 'on');
 
             % rephase y and z encoding gradients (required condition for steady state)
-            toppe.write2loop(mods.prephaser, seq.sys, ...
-                'textra', max(0, seq.bs.tr - trmin), ...
+            toppe.write2loop(mods.prephaser, sp.sys, ...
+                'textra', max(0, sp.bs.tr - trmin), ...
                 'Gamplitude', [1 -a_gy -a_gz]');
 
             % update rf phase (RF spoiling)
@@ -124,13 +183,13 @@ for iim = 1:nscans
     end
 end
 fprintf('\n');
-toppe.write2loop('finish', seq.sys);
+toppe.write2loop('finish', sp.sys);
 
 
 %% Create 'sequence stamp' file for TOPPE.
 % This file is listed in the 5th row in toppeN.entry
 % NB! The file toppeN.entry must exist in the folder from where this script is called.
-toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', seq.sys);
+toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sp.sys);
 
 
 %% create tar file
@@ -140,7 +199,7 @@ return;
 
 %% simulate slice profile
 [rf,~,~,gz] = toppe.readmod('ex.mod');
-X = linspace(-seq.rf.slThick, seq.rf.slThick, 100);         % cm
+X = linspace(-sp.rf.slThick, sp.rf.slThick, 100);         % cm
 dt = 4e-3;            % ms
 Gamp = max(gz);       % Gauss
 T1 = 500;
