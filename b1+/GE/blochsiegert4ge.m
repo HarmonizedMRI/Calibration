@@ -36,7 +36,7 @@ arg.decimation = 1;
 arg = toppe.utils.vararg_pair(arg, varargin);
 
 
-%% Set sequence parameters and define file names
+%% Set sequence parameters and perform other misc tasks
 
 flip = 15;             % low flip angle for spin-density weighting
 slThick = 0.8*FOV(3);  % slab thickness
@@ -75,7 +75,7 @@ fclose(fid);
 
 %% Create .mod files 
 
-% Create readout.mod and prephaser.mod
+% readout.mod and prephaser.mod
 [gx,gy,gz] = toppe.utils.makeepi(FOV, N, ...
     nShots, sys, ...
     'flyback', arg.flyback, ...
@@ -121,21 +121,19 @@ toppe.writemod(sys, 'gz', ex.rephaser, ...
 % Bloch-Siegert module
 toppe.utils.rf.makebs(bs.amp, 'system', sys, 'ofname', mods.bs);
 
-return;
 
-
-%% Get min TR so we can calculate textra (to achieve desired TR)
+%% Get minimum TR
 % We do this by building one TR
-toppe.write2loop('setup', sp.sys);
-toppe.write2loop(mods.ex, sp.sys);
-toppe.write2loop(mods.bs, sp.sys);
-toppe.write2loop(mods.exRephaser, sp.sys);
-toppe.write2loop(mods.prephaser, sp.sys);
-toppe.write2loop(mods.readout, sp.sys);
-toppe.write2loop(mods.prephaser, sp.sys);
-toppe.write2loop('finish', sp.sys);
+toppe.write2loop('setup', sys);
+toppe.write2loop(mods.ex, sys);
+toppe.write2loop(mods.bs, sys);
+toppe.write2loop(mods.exRephaser, sys);
+toppe.write2loop(mods.prephaser, sys);
+toppe.write2loop(mods.readout, sys);
+toppe.write2loop(mods.prephaser, sys);
+toppe.write2loop('finish', sys);
 
-trmin = (sp.nshots-1)/sp.nshots*sp.es + toppe.getTRtime(1, 6, sp.sys)*1e3;  % ms
+trmin = (nShots-1)/nShots*es + toppe.getTRtime(1, 6, sys)*1e3;  % ms
 
 
 %% Write scanloop.txt
@@ -144,36 +142,36 @@ rfphs = 0;    % radians
 rf_spoil_seed_cnt = 0;
 rf_spoil_seed = 117;
 
-toppe.write2loop('setup', sp.sys);
+toppe.write2loop('setup', sys);
 for iim = 1:nScans
     for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
-        for iy = 1:sp.nshots
+        for iy = 1:nShots
             % y/z phase-encode amplitudes, scaled to (-1,1)
             a_gy = -(iz>0)*((iy-1+0.5)-ny/2)/(ny/2);
             a_gz = -(iz>0)*((iz-1+0.5)-nz/2)/(nz/2);   
 
             % rf excitation, bloch-siegert pulse, and slice rephaser
-            toppe.write2loop(mods.ex, sp.sys, ...
+            toppe.write2loop(mods.ex, sys, ...
                 'RFphase', rfphs);
-            toppe.write2loop(mods.bs, sp.sys, ...
-                'RFoffset', sp.bs.freq(iim));
-            toppe.write2loop(mods.exRephaser, sp.sys, ...
-                'textra', (iy-1)/sp.nshots*sp.es);
+            toppe.write2loop(mods.bs, sys, ...
+                'RFoffset', arg.bsFreq(iim));
+            toppe.write2loop(mods.exRephaser, sys, ...
+                'textra', (iy-1)/nShots*es);
 
             % prephase (move to corner of kspace)
-            toppe.write2loop(mods.prephaser, sp.sys, ...
+            toppe.write2loop(mods.prephaser, sys, ...
                 'Gamplitude', [1 a_gy a_gz]');
 
             % readout. Data is stored in 'slice', 'echo', and 'view' indeces.
-            toppe.write2loop(mods.readout, sp.sys, ...
+            toppe.write2loop(mods.readout, sys, ...
                 'DAQphase', rfphs, ...
                 'slice', iim, 'echo', max(iz,1), 'view', iy, ...
-                'textra', sp.es - iy/sp.nshots*sp.es, ...
+                'textra', es - iy/nShots*es, ...
                 'dabmode', 'on');
 
             % rephase y and z encoding gradients (required condition for steady state)
-            toppe.write2loop(mods.prephaser, sp.sys, ...
-                'textra', max(0, sp.bs.tr - trmin), ...
+            toppe.write2loop(mods.prephaser, sys, ...
+                'textra', max(0, tr - trmin), ...
                 'Gamplitude', [1 -a_gy -a_gz]');
 
             % update rf phase (RF spoiling)
@@ -183,17 +181,18 @@ for iim = 1:nScans
     end
 end
 fprintf('\n');
-toppe.write2loop('finish', sp.sys);
+toppe.write2loop('finish', sys);
 
+return
 
-%% Create 'sequence stamp' file for TOPPE.
+%% Create 'sequence stamp' file for TOPPE
 % This file is listed in the 5th row in toppeN.entry
 % NB! The file toppeN.entry must exist in the folder from where this script is called.
-toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sp.sys);
+toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sys);
 
 
 %% create tar file
-system('tar czf ~/tmp/scan,exchange,b1.tgz seqstamp.txt modules.txt scanloop.txt *.mod getparams.m b1.m');
+system('tar czf ~/tmp/bs.tgz toppeN.entry seqstamp.txt scanloop.txt modules.txt *.mod');
 
 return;
 
