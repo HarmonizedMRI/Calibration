@@ -45,6 +45,17 @@ fprintf(fid, '%s\t0\t1\t0\n', mods.ex);
 fprintf(fid, '%s\t0\t0\t1\n', mods.readout);
 fclose(fid);
 
+% Write entry file.
+% This can be edited by hand as needed after copying to scanner.
+fid = fopen('toppeN.entry', 'wt');
+fprintf(fid, '/usr/g/research/pulseq/cal/\n');  
+fprintf(fid, 'modules.txt\n');
+fprintf(fid, 'scanloop.txt\n');
+fprintf(fid, '%s\n', mods.ex);
+fprintf(fid, '%s\n', mods.readout);
+fprintf(fid, 'seqstamp.txt');
+fclose(fid);
+
 
 %% Create .mod files
 
@@ -64,8 +75,8 @@ toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ...
     'ncycles', nCyclesSpoil); 
 
 % Display .mod files.
-toppe.plotmod(mods.ex, 'gradcoil', sys.gradient);
-toppe.plotmod(mods.readout, 'gradcoil', sys.gradient);
+%toppe.plotmod(mods.ex, 'gradcoil', sys.gradient);
+%toppe.plotmod(mods.readout, 'gradcoil', sys.gradient);
 
 
 %% Write scanloop.txt
@@ -108,7 +119,7 @@ toppe.write2loop('finish', sys);  % finalize file
 
 fprintf('TR = %.3f ms\n', toppe.getTRtime(1, 2, sys)*1e3);
 
-figure; toppe.plotseq(1, 4, sys);
+%figure; toppe.plotseq(1, 4, sys);
 
 
 %% Create 'sequence stamp' file for TOPPE
