@@ -65,12 +65,13 @@ ny = N(2);
 nz = N(3);
 
 % .mod file names
-mods.ex         = 'ex.mod';    % does not contain the rephasing gradient lobe
-mods.bs         = 'bs.mod';    % BS pulse (inserted between ex.mod and ex-rephaser.mod)
-mods.exRephaser = 'ex-rephaser.mod';  % slice-select rephaser
+mods.ex         = 'tipdown.mod';    % does not contain the rephasing gradient lobe
+mods.bs         = 'bs.mod';    % BS pulse (inserted between tipdown.mod and tipdown-rephaser.mod)
+mods.exRephaser = 'tipdown-rephaser.mod';  % slice-select rephaser
 mods.prephaser  = 'prephaser.mod';  % for EPI readout
 mods.readout    = 'readout.mod';    % EPI echo-train
 
+% Write modules.txt
 fid = fopen('modules.txt', 'wt');
 fprintf(fid, 'Total number of unique cores\n');
 fprintf(fid, '%d\n', length(fieldnames(mods)));
@@ -80,6 +81,17 @@ fprintf(fid, '%s\t0\t1\t0\n', mods.bs);
 fprintf(fid, '%s\t0\t0\t0\n', mods.exRephaser);
 fprintf(fid, '%s\t0\t0\t0\n', mods.prephaser);
 fprintf(fid, '%s\t0\t0\t1\n', mods.readout);
+fclose(fid);
+
+% Write entry file.
+% This can be edited by hand as needed after copying to scanner.
+fid = fopen('toppeN.entry', 'wt');
+fprintf(fid, '/usr/g/research/pulseq/cal/\n');  
+fprintf(fid, 'modules.txt\n');
+fprintf(fid, 'scanloop.txt\n');
+fprintf(fid, '%s\n', mods.ex);
+fprintf(fid, '%s\n', mods.readout);
+fprintf(fid, 'seqstamp.txt');
 fclose(fid);
 
 
