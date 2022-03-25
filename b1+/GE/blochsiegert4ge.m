@@ -214,7 +214,7 @@ toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sys);
 
 
 %% create tar file
-system('tar czf ~/tmp/bs.tgz toppeN.entry seqstamp.txt scanloop.txt modules.txt *.mod');
+system('tar cf b1.tar toppeN.entry seqstamp.txt scanloop.txt modules.txt *.mod');
 
 return;
 
