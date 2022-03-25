@@ -205,7 +205,7 @@ end
 fprintf('\n');
 toppe.write2loop('finish', sys);
 
-return
+
 
 %% Create 'sequence stamp' file for TOPPE
 % This file is listed in the 5th row in toppeN.entry
