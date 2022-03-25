@@ -28,7 +28,7 @@ nz = N(3);
 
 % excitation (imaging) pulse parameters
 ex.tbw = 8;           % time-bandwidth product of SLR pulse 
-ex.dur = 3;           % pulse duration (ms)
+ex.dur = 2;           % pulse duration (ms)
 ex.ftype = 'min';     % minimum-phase SLR pulse
 ex.slThick = 0.8*FOV(3);  % slab thickness
 
