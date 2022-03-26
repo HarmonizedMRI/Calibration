@@ -1,5 +1,5 @@
-function b04ge(sys, N, FOV, flip, DTE)
-% function b04ge(sys, N, FOV, flip, DTE)
+function b04ge(sys, N, FOV, flip, DTE, varargin)
+% function b04ge(sys, N, FOV, flip, DTE, varargin)
 %
 % Fully-sampled 3D RF-spoiled GRE sequence for B0 (and B1-) mapping.
 % 
@@ -9,6 +9,25 @@ function b04ge(sys, N, FOV, flip, DTE)
 %  FOV        [1 3]    field of view (cm)
 %  flip       [1 1]    flip angle (degrees)
 %  DTE        [1 n]    increase (from minimum value ) in TE for each of n scans
+%
+% Input options with defaults:
+%  entryFile = 'toppeN.entry';
+%  tbw = 8;                     % RF pulse time-bandwidth product
+%  rfdur = 2;                   % RF pulse duration (ms)
+%  ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
+%  slabThick = 0.8*FOV(3);      % excited slab thickness
+%  rf_spoil_seed = 117;         % RF spoiling phase increment factor (degrees)
+
+% defaults
+arg.entryFile = 'toppeN.entry';
+arg.tbw = 8;                     % RF pulse time-bandwidth product
+arg.rfdur = 2;                   % RF pulse duration (ms)
+arg.ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
+arg.slabThick = 0.8*FOV(3);      % excited slab thickness
+arg.rf_spoil_seed = 117;         % RF spoiling phase increment factor (degrees)
+
+% substitute with provided keyword arguments
+arg = toppe.utils.vararg_pair(arg, varargin);
 
 nScans = numel(DTE);
 
@@ -26,12 +45,6 @@ voxSize = FOV./N;  % cm
 ny = N(2);
 nz = N(3);
 
-% excitation (imaging) pulse parameters
-ex.tbw = 8;           % time-bandwidth product of SLR pulse 
-ex.dur = 2;           % pulse duration (ms)
-ex.ftype = 'min';     % minimum-phase SLR pulse
-ex.slThick = 0.8*FOV(3);  % slab thickness
-
 % .mod file names
 mods.ex         = 'tipdown.mod';
 mods.readout    = 'readout.mod';
@@ -47,22 +60,17 @@ fclose(fid);
 
 % Write entry file.
 % This can be edited by hand as needed after copying to scanner.
-fid = fopen('toppeN.entry', 'wt');
-fprintf(fid, '/usr/g/research/pulseq/cal/\n');  
-fprintf(fid, 'modules.txt\n');
-fprintf(fid, 'scanloop.txt\n');
-fprintf(fid, '%s\n', mods.ex);
-fprintf(fid, '%s\n', mods.readout);
-fprintf(fid, 'seqstamp.txt');
-fclose(fid);
-
+toppe.writeentryfile(arg.entryFile, ...
+    'filePath', '/usr/g/research/pulseq/cal/b0/', ...
+    'b1ScalingFile', mods.ex, ...
+    'readoutFile', mods.readout);
 
 %% Create .mod files
 
 % excitation module
-[ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, ex.slThick, ...
-    ex.tbw, ex.dur, nz*nCyclesSpoil, sys, ...
-    'ftype', ex.ftype, ...
+[ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, arg.slabThick, ...
+    arg.tbw, arg.rfdur, nz*nCyclesSpoil, sys, ...
+    'ftype', arg.ftype, ...
     'spoilDerate', 0.5, ...
     'ofname', mods.ex);
 
@@ -74,15 +82,10 @@ toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ...
     'ofname', mods.readout, ...
     'ncycles', nCyclesSpoil); 
 
-% Display .mod files.
-%toppe.plotmod(mods.ex, 'gradcoil', sys.gradient);
-%toppe.plotmod(mods.readout, 'gradcoil', sys.gradient);
-
 
 %% Write scanloop.txt
 rfphs = 0;              % radians
 rf_spoil_seed_cnt = 0;
-rf_spoil_seed = 117;    % degrees
 ny = N(2);
 nz = N(3);
 
@@ -109,7 +112,7 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
                 'slice', max(iz,1), 'echo', ite, 'view', iy);
 
             % update rf/rec phase
-            rfphs = rfphs + (rf_spoil_seed/180*pi)*rf_spoil_seed_cnt ;  % radians
+            rfphs = rfphs + (arg.rf_spoil_seed/180*pi)*rf_spoil_seed_cnt ;  % radians
             rf_spoil_seed_cnt = rf_spoil_seed_cnt + 1;
         end
     end
@@ -121,14 +124,14 @@ fprintf('TR = %.3f ms\n', toppe.getTRtime(1, 2, sys)*1e3);
 
 %figure; toppe.plotseq(1, 4, sys);
 
+% Create 'sequence stamp' file for TOPPE
+% This file is listed in line 6 of the .entry file
+toppe.preflightcheck(arg.entryFile, 'seqstamp.txt', sys);
 
-%% Create 'sequence stamp' file for TOPPE
-% This file is listed in line 6 of toppeN.entry
-toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sys);
+% Write files to tar archive (for convenience).
+system(sprintf('tar cf b0.tar %s seqstamp.txt scanloop.txt modules.txt *.mod', arg.entryFile));
 
-
-%% Write files to tar archive (for convenience).
-system('tar cf b0.tar toppeN.entry seqstamp.txt scanloop.txt modules.txt *.mod');
+toppe.utils.scanmsg(arg.entryFile);
 
 % Play sequence in loop (movie) mode
 %nModulesPerTR = 2;
