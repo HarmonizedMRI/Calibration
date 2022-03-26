@@ -3,9 +3,10 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 %
 % 3D FLASH segmented EPI (or spin warp) Bloch-Siegert B1+ mapping sequence.
 %
-% The following parameters are hard-coded:
+% The following parameters are hard-coded (edit as needed):
 %  Fermi function pulse shape of amplitude 0.05 Gauss
 %  imaging flip angle 15 deg
+%  .entry file name
 %
 % Inputs:
 %  sys          struct   scanner hardware settings. See toppe.systemspecs().
@@ -14,16 +15,21 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 %  nShots       [1 1]    number of EPI shots (segments)
 %  tr           [1 1]    sequence TR (ms)
 % 
-% Input options (keyword-value arguments):
-%  bsFreq       [1 (>=2)]    Bloch-Siegert pulse frequency offsets (Hz). 
-%                        Default: [-4000 4000]
-%  Ry           [1 1]    EPI undersampling factor. Default: 1
-%  flyback      bool     Flyback EPI? Default: true
-%  rampsamp     bool     Ramp sampling? Default: false
-%  decimation   int      Design EPI readout as if ADC dwell time is 4us*decimation.
-%                        Default: 1
-%                        Applies only to readouts w/o ramp sampling.
-%                        (The actual ADC dwell time is fixed to 4us in TOPPE)
+% Input options (keyword-value arguments) with defaults:
+%  entryFile = 'toppeN.entry';
+%  bsFreq = [-4000 4000];  % Bloch-Siegert pulse frequency offsets (Hz)
+%  Ry = 1;                 % EPI undersampling factor
+%  flyback = true;         % flyback EPI or not
+%  rampsamp = false;       % sample on ramps or not
+%  decimation = 1;         % Design EPI readout as if ADC dwell time is 4us*decimation
+                           % Applies only to readouts w/o ramp sampling.
+                           % (The actual ADC dwell time is fixed to 4us in TOPPE)
+%  flip = 15;                % degrees
+%  slabThick = 0.8*FOV(3);   % slab thickness
+%  tbw = 8;           % time-bandwidth product of SLR pulse 
+%  rfdur = 3;         % RF pulse duration (ms)
+%  ftype = 'min';     % minimum-phase (min) or linear phase (ls)
+%  bsamp = 0.05;      % Amplitude of Fermi pulse (Gauss)
 %
 % Example usage:
 %   sys = toppe.systemspecs('maxSlew', 10, 'gradient', 'xrm');                
@@ -36,28 +42,26 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 
 
 %% Parse input options
-arg.bsFreq = [-4000 4000];  % Hz
-arg.Ry = 1;
-arg.flyback = true;
-arg.rampsamp = false;
-arg.decimation = 1;
+arg.entryFile = 'toppeN.entry';
+arg.bsFreq = [-4000 4000];  % Bloch-Siegert pulse frequency offsets (Hz)
+arg.Ry = 1;                 % EPI undersampling factor
+arg.flyback = true;         % flyback EPI or not
+arg.rampsamp = false;       % sample on ramps or not
+arg.decimation = 1;         % Design EPI readout as if ADC dwell time is 4us*decimation
+                            % Applies only to readouts w/o ramp sampling.
+                            % (The actual ADC dwell time is fixed to 4us in TOPPE)
+arg.flip = 15;                % degrees
+arg.slabThick = 0.8*FOV(3);   % slab thickness
+arg.tbw = 8;           % time-bandwidth product of SLR pulse 
+arg.rfdur = 3;         % RF pulse duration (ms)
+arg.ftype = 'min';     % minimum-phase (min) or linear phase (ls)
+arg.bsamp = 0.05;      % Amplitude of Fermi pulse (Gauss)
 
 % Substitute varargin values as appropriate and check inputs
 arg = toppe.utils.vararg_pair(arg, varargin);
 
 
 %% Set sequence parameters and perform other misc tasks
-
-flip = 15;             % low flip angle for spin-density weighting
-slThick = 0.8*FOV(3);  % slab thickness
-
-% excitation (imaging) pulse
-ex.tbw = 8;           % time-bandwidth product of SLR pulse 
-ex.dur = 3;           % pulse duration (ms)
-ex.ftype = 'min';     
-
-% Fermi pulse
-bs.amp = 0.05;            % Amplitude of Fermi pulse (Gauss)
 
 nScans = numel(arg.bsFreq);
 
@@ -85,14 +89,10 @@ fclose(fid);
 
 % Write entry file.
 % This can be edited by hand as needed after copying to scanner.
-fid = fopen('toppeN.entry', 'wt');
-fprintf(fid, '/usr/g/research/pulseq/cal/\n');  
-fprintf(fid, 'modules.txt\n');
-fprintf(fid, 'scanloop.txt\n');
-fprintf(fid, '%s\n', mods.ex);
-fprintf(fid, '%s\n', mods.readout);
-fprintf(fid, 'seqstamp.txt');
-fclose(fid);
+toppe.writeentryfile(arg.entryFile, ...
+    'filePath', '/usr/g/research/pulseq/cal/b1/', ...
+    'b1ScalingFile', mods.ex, ...
+    'readoutFile', mods.readout);
 
 
 %% Create .mod files 
@@ -117,10 +117,10 @@ if nShots == N(2)
 end
 
 % imaging excitation pulse
-nCyclesSpoil = 4*nz;  % unbalanced gradients
-[ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, slThick, ...
-        ex.tbw, ex.dur, nCyclesSpoil, sys, ...
-        'ftype', ex.ftype, ...
+nCyclesSpoil = 2*nz;  % unbalanced gradients
+[ex.rf, ex.g] = toppe.utils.rf.makeslr(arg.flip, arg.slabThick, ...
+        arg.tbw, arg.rfdur, nCyclesSpoil, sys, ...
+        'ftype', arg.ftype, ...
         'spoilDerate', 0.5, ...
         'writeModFile', false);
 
@@ -141,7 +141,7 @@ toppe.writemod(sys, 'gz', ex.rephaser, ...
     'ofname', mods.exRephaser);
 
 % Bloch-Siegert module
-toppe.utils.rf.makebs(bs.amp, 'system', sys, 'ofname', mods.bs);
+toppe.utils.rf.makebs(arg.bsamp, 'system', sys, 'ofname', mods.bs);
 
 
 %% Get minimum TR
@@ -205,16 +205,14 @@ end
 fprintf('\n');
 toppe.write2loop('finish', sys);
 
-
-
-%% Create 'sequence stamp' file for TOPPE
+% Create 'sequence stamp' file for TOPPE
 % This file is listed in the 5th row in toppeN.entry
-% NB! The file toppeN.entry must exist in the folder from where this script is called.
-toppe.preflightcheck('toppeN.entry', 'seqstamp.txt', sys);
+toppe.preflightcheck(arg.entryFile, 'seqstamp.txt', sys);
 
+% create tar file (for convenience)
+system(sprintf('tar cf b1.tar %s seqstamp.txt scanloop.txt modules.txt *.mod', arg.entryFile));
 
-%% create tar file
-system('tar cf b1.tar toppeN.entry seqstamp.txt scanloop.txt modules.txt *.mod');
+toppe.utils.scanmsg(arg.entryFile);
 
 return;
 
