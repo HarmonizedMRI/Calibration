@@ -17,6 +17,7 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 % 
 % Input options (keyword-value arguments) with defaults:
 %  entryFile = 'toppeN.entry';
+%  filePath = '/usr/g/research/pulseq/cal/b1/';
 %  bsFreq = [-4000 4000];  % Bloch-Siegert pulse frequency offsets (Hz)
 %  Ry = 1;                 % EPI undersampling factor
 %  flyback = true;         % flyback EPI or not
@@ -43,6 +44,7 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 
 %% Parse input options
 arg.entryFile = 'toppeN.entry';
+arg.filePath = '/usr/g/research/pulseq/cal/b1/';
 arg.bsFreq = [-4000 4000];  % Bloch-Siegert pulse frequency offsets (Hz)
 arg.Ry = 1;                 % EPI undersampling factor
 arg.flyback = true;         % flyback EPI or not
@@ -90,7 +92,7 @@ fclose(fid);
 % Write entry file.
 % This can be edited by hand as needed after copying to scanner.
 toppe.writeentryfile(arg.entryFile, ...
-    'filePath', '/usr/g/research/pulseq/cal/b1/', ...
+    'filePath', arg.filePath, ...
     'b1ScalingFile', mods.ex, ...
     'readoutFile', mods.readout);
 

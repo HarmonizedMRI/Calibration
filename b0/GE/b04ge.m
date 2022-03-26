@@ -12,19 +12,27 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %
 % Input options with defaults:
 %  entryFile = 'toppeN.entry';
+%  filePath = '/usr/g/research/pulseq/cal/b0/';  % put scan files here
 %  tbw = 8;                     % RF pulse time-bandwidth product
-%  rfdur = 2;                   % RF pulse duration (ms)
+%  rfDur = 2;                   % RF pulse duration (ms)
 %  ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
 %  slabThick = 0.8*FOV(3);      % excited slab thickness
-%  rf_spoil_seed = 117;         % RF spoiling phase increment factor (degrees)
+%  rfSpoilSeed = 117;         % RF spoiling phase increment factor (degrees)
+%  exMod         = 'tipdown.mod';
+%  readoutMod    = 'readout.mod';
+%  nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
 
 % defaults
 arg.entryFile = 'toppeN.entry';
+arg.filePath = '/usr/g/research/pulseq/cal/b0/';
 arg.tbw = 8;                     % RF pulse time-bandwidth product
-arg.rfdur = 2;                   % RF pulse duration (ms)
+arg.rfDur = 2;                   % RF pulse duration (ms)
 arg.ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
 arg.slabThick = 0.8*FOV(3);      % excited slab thickness
-arg.rf_spoil_seed = 117;         % RF spoiling phase increment factor (degrees)
+arg.rfSpoilSeed = 117;         % RF spoiling phase increment factor (degrees)
+arg.exMod         = 'tipdown.mod';
+arg.readoutMod    = 'readout.mod';
+arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
@@ -37,55 +45,51 @@ if N(1) ~= N(2) | FOV(1) ~= FOV(2)
     error('In-plane FOV and matrix be square.');
 end
 
-% number of cycles of spoiler phase across voxel dimension (applied along x and z)
-nCyclesSpoil = 2;           
-
 voxSize = FOV./N;  % cm
 
 ny = N(2);
 nz = N(3);
 
-% .mod file names
-mods.ex         = 'tipdown.mod';
-mods.readout    = 'readout.mod';
+arg.exMod         = 'tipdown.mod';
+arg.redaoutmod    = 'readout.mod';
 
 % Write modules.txt
 fid = fopen('modules.txt', 'wt');
 fprintf(fid, 'Total number of unique cores\n');
 fprintf(fid, '%d\n', 2);
 fprintf(fid, 'fname  duration(us)    hasRF?  hasDAQ?\n');
-fprintf(fid, '%s\t0\t1\t0\n', mods.ex);
-fprintf(fid, '%s\t0\t0\t1\n', mods.readout);
+fprintf(fid, '%s\t0\t1\t0\n', arg.exMod);
+fprintf(fid, '%s\t0\t0\t1\n', arg.redaoutmod);
 fclose(fid);
 
 % Write entry file.
 % This can be edited by hand as needed after copying to scanner.
 toppe.writeentryfile(arg.entryFile, ...
-    'filePath', '/usr/g/research/pulseq/cal/b0/', ...
-    'b1ScalingFile', mods.ex, ...
-    'readoutFile', mods.readout);
+    'filePath', arg.filePath, ...
+    'b1ScalingFile', arg.exMod, ...
+    'readoutFile', arg.redaoutmod);
 
 %% Create .mod files
 
 % excitation module
 [ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, arg.slabThick, ...
-    arg.tbw, arg.rfdur, nz*nCyclesSpoil, sys, ...
+    arg.tbw, arg.rfDur, nz*arg.nCyclesSpoil, sys, ...
     'ftype', arg.ftype, ...
     'spoilDerate', 0.5, ...
-    'ofname', mods.ex);
+    'ofname', arg.exMod);
 
 % readout module
 % Here we use the helper function 'makegre' to do that, but
 % that's not a requirement.
 % Reduce slew to keep PNS in normal mode (<80% of limit)
 toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ... 
-    'ofname', mods.readout, ...
-    'ncycles', nCyclesSpoil); 
+    'ofname', arg.redaoutmod, ...
+    'ncycles', arg.nCyclesSpoil); 
 
 
 %% Write scanloop.txt
 rfphs = 0;              % radians
-rf_spoil_seed_cnt = 0;
+rfSpoilSeed_cnt = 0;
 ny = N(2);
 nz = N(3);
 
@@ -100,20 +104,20 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
             a_gy = -((iy-1+0.5)-ny/2)/(ny/2) * (iz>0);  
             a_gz = -((iz-1+0.5)-nz/2)/(nz/2) * (iz>0);
 
-            toppe.write2loop(mods.ex, sys, ...
+            toppe.write2loop(arg.exMod, sys, ...
                 'RFamplitude', 1.0, ...
                 'textra', DTE(ite), ...
                 'RFphase', rfphs);
 
-            toppe.write2loop(mods.readout, sys, ...
+            toppe.write2loop(arg.redaoutmod, sys, ...
                 'Gamplitude', [1.0 a_gy a_gz]', ...
                 'DAQphase', rfphs, ...
                 'textra', max(DTE) - DTE(ite), ... % to keep TR constant
                 'slice', max(iz,1), 'echo', ite, 'view', iy);
 
             % update rf/rec phase
-            rfphs = rfphs + (arg.rf_spoil_seed/180*pi)*rf_spoil_seed_cnt ;  % radians
-            rf_spoil_seed_cnt = rf_spoil_seed_cnt + 1;
+            rfphs = rfphs + (arg.rfSpoilSeed/180*pi)*rfSpoilSeed_cnt ;  % radians
+            rfSpoilSeed_cnt = rfSpoilSeed_cnt + 1;
         end
     end
 end
