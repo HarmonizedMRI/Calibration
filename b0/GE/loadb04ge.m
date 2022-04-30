@@ -1,5 +1,5 @@
-function [ims, b0, imsos1] = loadb04ge(pfile, deltaTE, readoutFile)
-% function [ims, b0, imsos1] = loadb04ge(pfile, deltaTE, readoutFile)
+function [b0, ims, rssim] = loadb04ge(pfile, deltaTE, readoutFile)
+% function [b0, ims, rssim] = loadb04ge(pfile, deltaTE, readoutFile)
 %
 % Reconstruct individual coil images and B0 map
 %
@@ -11,7 +11,8 @@ function [ims, b0, imsos1] = loadb04ge(pfile, deltaTE, readoutFile)
 % Outputs:
 %  b0            [nx ny nz] B0 field map calculated from the first two
 %                entries in deltaTE (Hz)
-%  ims           [nx ny nz ncoils] Individual coil images
+%  ims           [nx ny nz ncoils] Individual coil images (complex)
+%  rssim         Root-sum-of-squares coil-combined image from first echo
 
 if nargin < 3
     readoutFile = 'readout.mod';
@@ -33,9 +34,11 @@ if length(deltaTE) > 1
 end
 
 % root sum of squares coil-combined image from first echo
-imsos1 = sqrt(sum(abs(ims(:,:,:,:,1)).^2, 4));
+rssim = sqrt(sum(abs(ims(:,:,:,:,1)).^2, 4));
 
-mask = imsos1 > 0.1*max(imsos1(:));
+return
+
+mask = rssim > 0.1*max(rssim(:));
 b0(~mask) = 0;
 
 im(b0, [-100 100]); colormap default; colorbar;
