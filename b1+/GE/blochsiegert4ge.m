@@ -167,9 +167,9 @@ rf_spoil_seed_cnt = 0;
 rf_spoil_seed = 117;
 
 toppe.write2loop('setup', sys);
-for iim = 1:nScans
-    for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
-        for iy = 1:nShots
+for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
+    for iy = 1:nShots
+        for iim = 1:nScans
             % y/z phase-encode amplitudes, scaled to (-1,1)
             a_gy = -(iz>0)*((iy-1+0.5)-ny/2)/(ny/2);
             a_gz = -(iz>0)*((iz-1+0.5)-nz/2)/(nz/2);   
