@@ -1,14 +1,23 @@
 function [b1, rss] = loadblochsiegert4ge(pfile, readoutFile, bsModuleFile)
 % function [b1, rss] = loadblochsiegert4ge(pfile, readoutFile)
 %
-% Reconstruct individual coil images and B0 map
+% WIP. Not tested.
+% TODO:
+%  if non-flyback: do odd/even EPI echo correction
+%  if ramp sampling: do interpolation
+%  Add BS pulse info to bs.mod header, and load here
+%
+% Get b1+ map obtained with the TOPPE sequence files created
+% with blochsiegert4ge.m
 %
 % Inputs:
 %  pfile         string
-%  readoutFile   string. Default: 'readout.mod' inside 'b0.tar'
+%  readoutFile   string   Module file name, e.g., 'readout.mod'
+%  bsMofuleFile  string   Module file name, e.g., 'bs.mod'
 %
 % Outputs:
-%  rssim         Root-sum-of-squares coil-combined image from first echo
+%  b1        [nx ny nz]   b1 map (Gauss)
+%  rss       [nx ny nz]   Root-sum-of-squares coil-combined image from first echo
 
 % Get decimation from readout module file header
 [rf,gx,gy,gz,desc,paramsint16,paramsfloat,hdr] = toppe.readmod(readoutFile);
