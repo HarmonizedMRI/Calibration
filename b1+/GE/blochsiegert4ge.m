@@ -1,4 +1,4 @@
-function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
+function blochsiegert4ge(sys, N, FOV, nShots, tr, bsFreq, varargin)
 % function blochsiegert4ge(sys, N, FOV, tr, [etl, Ry, isFlyback, isRampsamp, bsFreq)
 %
 % 3D FLASH segmented EPI (or spin warp) Bloch-Siegert B1+ mapping sequence.
@@ -14,14 +14,14 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 %  FOV          [1 3]    field of view (cm)
 %  nShots       [1 1]    number of EPI shots (segments)
 %  tr           [1 1]    sequence TR (ms)
+%  bsFreq       [1 1]    Bloch-Siegert pulse frequency offset (Hz)
 % 
 % Input options (keyword-value arguments) with defaults:
-%  entryFile = 'toppeN.entry';
-%  filePath = '/usr/g/research/pulseq/cal/b1/';
-%  bsFreq = [-4000 4000];  % Bloch-Siegert pulse frequency offsets (Hz)
-%  Ry = 1;                 % EPI undersampling factor
-%  flyback = true;         % flyback EPI or not
-%  rampsamp = false;       % sample on ramps or not
+%  entryFile  = 'toppeN.entry';
+%  filePath   = '/usr/g/research/pulseq/cal/b1/'   % location of toppe<N>.entry file
+%  Ry         = 1;         % EPI undersampling factor
+%  flyback    = true;      % flyback EPI or not
+%  rampsamp   = false;     % sample on ramps or not
 %  decimation = 1;         % Design EPI readout as if ADC dwell time is 4us*decimation
                            % Applies only to readouts w/o ramp sampling.
                            % (The actual ADC dwell time is fixed to 4us in TOPPE)
@@ -45,7 +45,6 @@ function blochsiegert4ge(sys, N, FOV, nShots, tr, varargin)
 %% Parse input options
 arg.entryFile = 'toppeN.entry';
 arg.filePath = '/usr/g/research/pulseq/cal/b1/';
-arg.bsFreq = [-4000 4000];  % Bloch-Siegert pulse frequency offsets (Hz)
 arg.Ry = 1;                 % EPI undersampling factor
 arg.flyback = true;         % flyback EPI or not
 arg.rampsamp = false;       % sample on ramps or not
@@ -64,8 +63,6 @@ arg = toppe.utils.vararg_pair(arg, varargin);
 
 
 %% Set sequence parameters and perform other misc tasks
-
-nScans = numel(arg.bsFreq);
 
 ny = N(2);
 nz = N(3);
@@ -166,10 +163,12 @@ rfphs = 0;    % radians
 rf_spoil_seed_cnt = 0;
 rf_spoil_seed = 117;
 
+freq = [-bsFreq bsFreq];
+
 toppe.write2loop('setup', sys);
 for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
     for iy = 1:nShots
-        for iim = 1:nScans
+        for iim = 1:length(freq)
             % y/z phase-encode amplitudes, scaled to (-1,1)
             a_gy = -(iz>0)*((iy-1+0.5)-ny/2)/(ny/2);
             a_gz = -(iz>0)*((iz-1+0.5)-nz/2)/(nz/2);   
@@ -178,7 +177,7 @@ for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
             toppe.write2loop(mods.ex, sys, ...
                 'RFphase', rfphs);
             toppe.write2loop(mods.bs, sys, ...
-                'RFoffset', arg.bsFreq(iim));
+                'RFoffset', freq(iim));
             toppe.write2loop(mods.exRephaser, sys, ...
                 'textra', (iy-1)/nShots*es);
 

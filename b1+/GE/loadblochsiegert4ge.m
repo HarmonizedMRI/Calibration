@@ -1,4 +1,4 @@
-function [b1, rss] = loadblochsiegert4ge(pfile, readoutFile, bsModuleFile)
+function [b1, rss] = loadblochsiegert4ge(pfile, readoutFile, bsModuleFile, bsFreq)
 % function [b1, rss] = loadblochsiegert4ge(pfile, readoutFile)
 %
 % WIP. Not tested.
@@ -14,6 +14,7 @@ function [b1, rss] = loadblochsiegert4ge(pfile, readoutFile, bsModuleFile)
 %  pfile         string
 %  readoutFile   string   Module file name, e.g., 'readout.mod'
 %  bsMofuleFile  string   Module file name, e.g., 'bs.mod'
+%  bsFreq        [1 1]    Bloch-Siegert pulse frequency offsets (Hz)
 %
 % Outputs:
 %  b1        [nx ny nz]   b1 map (Gauss)
@@ -34,11 +35,10 @@ end
 % Reconstruct complex coil images
 imNegFreq = toppe.utils.ift3(d(:,:,:,:,1));  % negative Bloch-Siegert frequency
 imPosFreq = toppe.utils.ift3(d(:,:,:,:,2));  % 
-bs.amp = 0.05;           % Amplitude of Fermi pulse (Gauss)
-bs.freq = [-4000 4000];  % Frequency offset of Fermi pulse (Hz)
+bs.amp = max(abs(rf));           % Amplitude of Fermi pulse (Gauss)
 rf = toppe.readmod(bsModuleFile);
 dt = 4e-6;  % RF raster time (sec)
-kbs = toppe.utils.rf.calckbs(rf, bs.freq(2), dt);
+kbs = toppe.utils.rf.calckbs(rf, bsFreq, dt);
 pc = toppe.utils.phasecontrast3d(imPosFreq, imNegFreq);
 b1 = sqrt(pc/2/kbs);   % Measured b1 in Gauss. Note factor of 2!
 
