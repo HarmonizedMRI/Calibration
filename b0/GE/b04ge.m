@@ -50,9 +50,6 @@ voxSize = FOV./N;  % cm
 ny = N(2);
 nz = N(3);
 
-arg.exMod         = 'tipdown.mod';
-arg.redaoutmod    = 'readout.mod';
-
 % Write modules.txt
 fid = fopen('modules.txt', 'wt');
 fprintf(fid, 'Total number of unique cores\n');
