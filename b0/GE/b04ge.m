@@ -12,19 +12,22 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %
 % Input options with defaults:
 %  entryFile = 'toppeN.entry';
-%  filePath = '/usr/g/research/pulseq/cal/b0/';  % put scan files here
+%  scanFilePath = '/usr/g/research/pulseq/cal/b0/';  
 %  tbw = 8;                     % RF pulse time-bandwidth product
 %  rfDur = 2;                   % RF pulse duration (ms)
 %  ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
 %  slabThick = 0.8*FOV(3);      % excited slab thickness
-%  rfSpoilSeed = 117;         % RF spoiling phase increment factor (degrees)
-%  exMod         = 'tipdown.mod';
-%  readoutMod    = 'readout.mod';
-%  nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
+%  rfSpoilSeed = 117;              % RF spoiling phase increment factor (degrees)
+%  exMod        = 'tipdown.mod';
+%  readoutMod   = 'readout.mod';
+%  nCyclesSpoil = 2;               % number of cycles of phase across voxel (along x and z)
+%  fatsat       = false;           % struct containing fat sat settings:
+%  fatsatFreq   = -440;            % Hz
+%  fatsatTBW
 
 % defaults
 arg.entryFile = 'toppeN.entry';
-arg.filePath = '/usr/g/research/pulseq/cal/b0/';
+arg.scanFilePath = '/usr/g/research/pulseq/cal/b0/';
 arg.tbw = 8;                     % RF pulse time-bandwidth product
 arg.rfDur = 2;                   % RF pulse duration (ms)
 arg.ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
@@ -33,6 +36,7 @@ arg.rfSpoilSeed = 117;         % RF spoiling phase increment factor (degrees)
 arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
+arg.fatsat       = false;           % add fat saturation pulse
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
@@ -51,10 +55,14 @@ ny = N(2);
 nz = N(3);
 
 % Write modules.txt
+nModules = 2 + arg.fatsat;
 fid = fopen('modules.txt', 'wt');
 fprintf(fid, 'Total number of unique cores\n');
-fprintf(fid, '%d\n', 2);
+fprintf(fid, '%d\n', nModules);
 fprintf(fid, 'fname  duration(us)    hasRF?  hasDAQ?\n');
+if arg.fatsat
+    fprintf(fid, '%s\t0\t1\t0\n', 'fatsat.mod');
+end
 fprintf(fid, '%s\t0\t1\t0\n', arg.exMod);
 fprintf(fid, '%s\t0\t0\t1\n', arg.readoutMod);
 fclose(fid);
@@ -62,11 +70,32 @@ fclose(fid);
 % Write entry file.
 % This can be edited by hand as needed after copying to scanner.
 toppe.writeentryfile(arg.entryFile, ...
-    'filePath', arg.filePath, ...
+    'filePath', arg.scanFilePath, ...
     'b1ScalingFile', arg.exMod, ...
     'readoutFile', arg.readoutMod);
 
+
 %% Create .mod files
+
+% fat sat module (including spoiler)
+fatsat.flip    = 90;
+fatsat.slThick = 1000;       % dummy value (determines slice-select gradient, but we won't use it; just needs to be large to reduce dead time before+after rf pulse)
+fatsat.tbw     = 2.0;        % time-bandwidth product
+fatsat.dur     = 4.5;        % pulse duration (ms)
+fatsat.freq    = -440;       % Hz
+
+b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur, 1e-6, sys, ...
+    'type', 'ex', ...    % fatsat pulse is a 90 so is of type 'ex', not 'st' (small-tip)
+    'writeModFile', false);
+b1 = toppe.makeGElength(b1);
+toppe.writemod(sys, 'rf', b1, 'ofname', 'fatsat.mod', 'desc', 'fat sat pulse');
+
+%% Spoiler
+tmpslew = 6;  % G/cm/ms
+gspoil = toppe.utils.makecrusher(2, 0.3, sys, 0, tmpslew);  % 2 cycles of spoiling across 0.3 cm
+gspoil = toppe.makeGElength(gspoil);
+toppe.writemod(sys, 'gx', gspoil, ... % tipdown.mod already has spoiler on z
+    'ofname', 'spoiler.mod', 'desc', 'gradient spoiler');
 
 % excitation module
 [ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, arg.slabThick, ...
