@@ -193,9 +193,10 @@ for iz = 0:nz   % iz < 1 are discarded acquisitions to reach steady state
                 'dabmode', 'on');
 
             % rephase y and z encoding gradients (required condition for steady state)
+            % turn off x trapezoid
             toppe.write2loop(mods.prephaser, sys, ...
                 'textra', max(0, tr - trmin), ...
-                'Gamplitude', [1 -a_gy -a_gz]');
+                'Gamplitude', [0 -a_gy -a_gz]');
 
             % update rf phase (RF spoiling)
             rfphs = rfphs + (rf_spoil_seed/180 * pi)*rf_spoil_seed_cnt ;  % radians
