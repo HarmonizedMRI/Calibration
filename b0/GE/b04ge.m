@@ -8,7 +8,7 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %  N          [1 3]    matrix size
 %  FOV        [1 3]    field of view (cm)
 %  flip       [1 1]    flip angle (degrees)
-%  DTE        [1 n]    increase (from minimum value ) in TE for each of n scans
+%  DTE        [1 n]    increase (from minimum value ) in TE for each of n scans (ms)
 %
 % Input options with defaults:
 %  entryFile = 'toppeN.entry';
