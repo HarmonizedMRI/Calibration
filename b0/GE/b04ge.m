@@ -22,8 +22,7 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %  readoutMod   = 'readout.mod';
 %  nCyclesSpoil = 2;               % number of cycles of phase across voxel (along x and z)
 %  fatsat       = false;           % struct containing fat sat settings:
-%  fatsatFreq   = -440;            % Hz
-%  fatsatTBW
+%  fatFreqSign = +1;               %
 
 % defaults
 arg.entryFile = 'toppeN.entry';
@@ -32,12 +31,12 @@ arg.tbw = 8;                     % RF pulse time-bandwidth product
 arg.rfDur = 2;                   % RF pulse duration (ms)
 arg.ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
 arg.slabThick = 0.8*FOV(3);      % excited slab thickness
-arg.rfSpoilSeed = 117;         % RF spoiling phase increment factor (degrees)
+arg.rfSpoilSeed = 117;           % RF spoiling phase increment factor (degrees)
 arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
-arg.fatsat       = false;           % add fat saturation pulse
-arg.fatFreqSign = +1;
+arg.fatsat       = false;        % add fat saturation pulse?
+arg.fatFreqSign = +1;            % sign of fatsat pulse frequency offset
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
@@ -152,7 +151,6 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
                 'textra', max(DTE) - DTE(ite), ... % to keep TR constant
                 'slice', max(iz,1), 'echo', ite, 'view', iy);
 
-            % update rf/rec phase
             rfphs = rfphs + (arg.rfSpoilSeed/180*pi)*rfSpoilSeed_cnt ;  % radians
             rfSpoilSeed_cnt = rfSpoilSeed_cnt + 1;
         end
