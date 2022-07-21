@@ -37,6 +37,7 @@ arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
 arg.fatsat       = false;           % add fat saturation pulse
+arg.fatFreqSign = +1;
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
@@ -82,7 +83,6 @@ fatsat.flip    = 90;
 fatsat.slThick = 1000;       % dummy value (determines slice-select gradient, but we won't use it; just needs to be large to reduce dead time before+after rf pulse)
 fatsat.tbw     = 2.0;        % time-bandwidth product
 fatsat.dur     = 4.5;        % pulse duration (ms)
-fatsat.freq    = -440;       % Hz
 
 b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur, 1e-6, sys, ...
     'type', 'ex', ...    % fatsat pulse is a 90 so is of type 'ex', not 'st' (small-tip)
@@ -129,6 +129,17 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
             % My convention is to start at (-kymax, -kzmax)
             a_gy = -((iy-1+0.5)-ny/2)/(ny/2) * (iz>0);  
             a_gz = -((iz-1+0.5)-nz/2)/(nz/2) * (iz>0);
+
+            if(arg.fatsat)
+                fatChemShift = 3.5;  % fat/water chemical shift (ppm)
+                fatFreq = arg.fatFreqSign*sys.gamma*1e4*sys.B0*fatChemShift*1e-6;
+                toppe.write2loop('fatsat.mod', sys, ...
+                    'RFoffset', round(fatFreq), ...   % Hz
+                    'RFphase', rfphs);         % radians
+
+                rfphs = rfphs + (arg.rfSpoilSeed/180*pi)*rfSpoilSeed_cnt ;  % radians
+                rfSpoilSeed_cnt = rfSpoilSeed_cnt + 1;
+            end
 
             toppe.write2loop(arg.exMod, sys, ...
                 'RFamplitude', 1.0, ...
