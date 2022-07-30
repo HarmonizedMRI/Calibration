@@ -41,17 +41,17 @@ arg.fatFreqSign = +1;            % sign of fatsat pulse frequency offset
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
 
-nScans = numel(DTE);
+% nScans = numel(DTE);
 
 % Since we are using the helper function 'makegre' below,
 % the in-plane FOV and matrix size must be square.
-if N(1) ~= N(2) | FOV(1) ~= FOV(2)
+if N(1) ~= N(2) || FOV(1) ~= FOV(2)
     error('In-plane FOV and matrix be square.');
 end
 
 voxSize = FOV./N;  % cm
 
-ny = N(2);
+% ny = N(2);
 nz = N(3);
 
 % Write modules.txt
@@ -76,7 +76,7 @@ toppe.writeentryfile(arg.entryFile, ...
 
 
 %% Create .mod files
-
+if arg.fatsat
 % fat sat module (including spoiler)
 fatsat.flip    = 90;
 fatsat.slThick = 1000;       % dummy value (determines slice-select gradient, but we won't use it; just needs to be large to reduce dead time before+after rf pulse)
@@ -86,24 +86,27 @@ fatsat.dur     = 4.5;        % pulse duration (ms)
 b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur, 1e-6, sys, ...
     'type', 'ex', ...    % fatsat pulse is a 90 so is of type 'ex', not 'st' (small-tip)
     'writeModFile', false);
-b1 = toppe.makeGElength(b1);
-toppe.writemod(sys, 'rf', b1, 'ofname', 'fatsat.mod', 'desc', 'fat sat pulse');
 
-%% Spoiler
+%Spoiler for fatsat
 tmpslew = 6;  % G/cm/ms
 gspoil = toppe.utils.makecrusher(2, 0.3, sys, 0, tmpslew);  % 2 cycles of spoiling across 0.3 cm
-gspoil = toppe.makeGElength(gspoil);
-toppe.writemod(sys, 'gx', gspoil, ... % tipdown.mod already has spoiler on z
-    'ofname', 'spoiler.mod', 'desc', 'gradient spoiler');
 
-% excitation module
+%combining fat excitation and  spoiling to make a fatsat mod
+gspoil =[0*b1; gspoil];
+b1 = [b1;0*gspoil];
+gspoil= toppe.makeGElength(gspoil);
+b1 = toppe.makeGElength(b1);
+toppe.writemod(sys, 'rf', b1, 'gz', gspoil, 'ofname', 'fatsat.mod');
+end
+
+% excitation module for B0
 [ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, arg.slabThick, ...
     arg.tbw, arg.rfDur, nz*arg.nCyclesSpoil, sys, ...
     'ftype', arg.ftype, ...
     'spoilDerate', 0.5, ...
     'ofname', arg.exMod);
 
-% readout module
+% readout module for B0
 % Here we use the helper function 'makegre' to do that, but
 % that's not a requirement.
 % Reduce slew to keep PNS in normal mode (<80% of limit)
@@ -128,6 +131,12 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
             % My convention is to start at (-kymax, -kzmax)
             a_gy = -((iy-1+0.5)-ny/2)/(ny/2) * (iz>0);  
             a_gz = -((iz-1+0.5)-nz/2)/(nz/2) * (iz>0);
+            
+            if arg.fatsat
+            toppe.write2loop('fatsat.mod', sys, ...
+                'Gamplitude', [0 0 1]', ...
+                'RFoffset', fatsat.freq);
+            end
 
             if(arg.fatsat)
                 fatChemShift = 3.5;  % fat/water chemical shift (ppm)
