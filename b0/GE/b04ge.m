@@ -35,7 +35,7 @@ arg.rfSpoilSeed = 117;           % RF spoiling phase increment factor (degrees)
 arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
-arg.fatsat       = true;         % add fat saturation pulse?
+arg.fatsat       = false;         % add fat saturation pulse?
 arg.fatFreqSign = +1;            % sign of fatsat pulse frequency offset
 
 % substitute with provided keyword arguments
