@@ -35,7 +35,7 @@ arg.rfSpoilSeed = 117;           % RF spoiling phase increment factor (degrees)
 arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
-arg.fatsat       = false;        % add fat saturation pulse?
+arg.fatsat       = true;         % add fat saturation pulse?
 arg.fatFreqSign = +1;            % sign of fatsat pulse frequency offset
 
 % substitute with provided keyword arguments
@@ -77,7 +77,7 @@ toppe.writeentryfile(arg.entryFile, ...
 
 %% Create .mod files
 
-% fat sat module (including spoiler)
+% fat sat module
 fatsat.flip    = 90;
 fatsat.slThick = 1000;       % dummy value (determines slice-select gradient, but we won't use it; just needs to be large to reduce dead time before+after rf pulse)
 fatsat.tbw     = 2.0;        % time-bandwidth product
@@ -89,13 +89,6 @@ b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur,
 b1 = toppe.makeGElength(b1);
 toppe.writemod(sys, 'rf', b1, 'ofname', 'fatsat.mod', 'desc', 'fat sat pulse');
 
-%% Spoiler
-tmpslew = 6;  % G/cm/ms
-gspoil = toppe.utils.makecrusher(2, 0.3, sys, 0, tmpslew);  % 2 cycles of spoiling across 0.3 cm
-gspoil = toppe.makeGElength(gspoil);
-toppe.writemod(sys, 'gx', gspoil, ... % tipdown.mod already has spoiler on z
-    'ofname', 'spoiler.mod', 'desc', 'gradient spoiler');
-
 % excitation module
 [ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, arg.slabThick, ...
     arg.tbw, arg.rfDur, nz*arg.nCyclesSpoil, sys, ...
@@ -104,8 +97,7 @@ toppe.writemod(sys, 'gx', gspoil, ... % tipdown.mod already has spoiler on z
     'ofname', arg.exMod);
 
 % readout module
-% Here we use the helper function 'makegre' to do that, but
-% that's not a requirement.
+% Here we use the helper function 'makegre' to do that, but that's not a requirement.
 % Reduce slew to keep PNS in normal mode (<80% of limit)
 toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ... 
     'ofname', arg.readoutMod, ...
@@ -131,7 +123,7 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
 
             if(arg.fatsat)
                 fatChemShift = 3.5;  % fat/water chemical shift (ppm)
-                fatFreq = arg.fatFreqSign*sys.gamma*1e4*sys.B0*fatChemShift*1e-6;
+                fatFreq = arg.fatFreqSign*sys.gamma*1e4*sys.B0*fatChemShift*1e-6;  % Hz
                 toppe.write2loop('fatsat.mod', sys, ...
                     'RFoffset', round(fatFreq), ...   % Hz
                     'RFphase', rfphs);         % radians
