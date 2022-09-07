@@ -113,7 +113,7 @@ nz = N(3);
 toppe.write2loop('setup', sys, 'version', 4);  % initialize file ('scanloop.txt')
 
 for iz = -1:nz     % We use iz<1 for approach to steady-state
-    fprintf('\b\b\b\b\b\b\b\b%d of %d', max(1,iz), nz);
+    fprintf('\b\b\b\b\b\b\b\b\b\b\b\b%d of %d', max(1,iz), nz);
     for iy = 1:ny
         for ite = 1:length(DTE)
             % y/z phase encode amplitudes. Turn off during approach to steady-state.
