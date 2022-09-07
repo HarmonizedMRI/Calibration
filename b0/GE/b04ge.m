@@ -8,7 +8,7 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %  N          [1 3]    matrix size
 %  FOV        [1 3]    field of view (cm)
 %  flip       [1 1]    flip angle (degrees)
-%  DTE        [1 n]    increase (from minimum value ) in TE for each of n scans
+%  DTE        [1 n]    increase (from minimum value ) in TE for each of n scans (ms)
 %
 % Input options with defaults:
 %  entryFile = 'toppeN.entry';
@@ -22,8 +22,7 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %  readoutMod   = 'readout.mod';
 %  nCyclesSpoil = 2;               % number of cycles of phase across voxel (along x and z)
 %  fatsat       = false;           % struct containing fat sat settings:
-%  fatsatFreq   = -440;            % Hz
-%  fatsatTBW
+%  fatFreqSign = -1;               %
 
 % defaults
 arg.entryFile = 'toppeN.entry';
@@ -32,11 +31,12 @@ arg.tbw = 8;                     % RF pulse time-bandwidth product
 arg.rfDur = 2;                   % RF pulse duration (ms)
 arg.ftype = 'min';               % 'min': minimum-phase SLR pulse; 'ls': linear phase
 arg.slabThick = 0.8*FOV(3);      % excited slab thickness
-arg.rfSpoilSeed = 117;         % RF spoiling phase increment factor (degrees)
+arg.rfSpoilSeed = 117;           % RF spoiling phase increment factor (degrees)
 arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
-arg.fatsat       = false;           % add fat saturation pulse
+arg.fatsat       = false;         % add fat saturation pulse?
+arg.fatFreqSign = -1;            % sign of fatsat pulse frequency offset
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
@@ -77,25 +77,17 @@ toppe.writeentryfile(arg.entryFile, ...
 
 %% Create .mod files
 
-% fat sat module (including spoiler)
+% fat sat module
 fatsat.flip    = 90;
 fatsat.slThick = 1000;       % dummy value (determines slice-select gradient, but we won't use it; just needs to be large to reduce dead time before+after rf pulse)
 fatsat.tbw     = 2.0;        % time-bandwidth product
 fatsat.dur     = 4.5;        % pulse duration (ms)
-fatsat.freq    = -440;       % Hz
 
 b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur, 1e-6, sys, ...
     'type', 'ex', ...    % fatsat pulse is a 90 so is of type 'ex', not 'st' (small-tip)
     'writeModFile', false);
 b1 = toppe.makeGElength(b1);
 toppe.writemod(sys, 'rf', b1, 'ofname', 'fatsat.mod', 'desc', 'fat sat pulse');
-
-%% Spoiler
-tmpslew = 6;  % G/cm/ms
-gspoil = toppe.utils.makecrusher(2, 0.3, sys, 0, tmpslew);  % 2 cycles of spoiling across 0.3 cm
-gspoil = toppe.makeGElength(gspoil);
-toppe.writemod(sys, 'gx', gspoil, ... % tipdown.mod already has spoiler on z
-    'ofname', 'spoiler.mod', 'desc', 'gradient spoiler');
 
 % excitation module
 [ex.rf, ex.g] = toppe.utils.rf.makeslr(flip, arg.slabThick, ...
@@ -105,8 +97,7 @@ toppe.writemod(sys, 'gx', gspoil, ... % tipdown.mod already has spoiler on z
     'ofname', arg.exMod);
 
 % readout module
-% Here we use the helper function 'makegre' to do that, but
-% that's not a requirement.
+% Here we use the helper function 'makegre' to do that, but that's not a requirement.
 % Reduce slew to keep PNS in normal mode (<80% of limit)
 toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ... 
     'ofname', arg.readoutMod, ...
@@ -122,13 +113,24 @@ nz = N(3);
 toppe.write2loop('setup', sys, 'version', 4);  % initialize file ('scanloop.txt')
 
 for iz = -1:nz     % We use iz<1 for approach to steady-state
-    fprintf('\b\b\b\b\b\b\b\b%d of %d', max(1,iz), nz);
+    fprintf('\b\b\b\b\b\b\b\b\b\b\b\b%d of %d', max(1,iz), nz);
     for iy = 1:ny
         for ite = 1:length(DTE)
             % y/z phase encode amplitudes. Turn off during approach to steady-state.
             % My convention is to start at (-kymax, -kzmax)
             a_gy = -((iy-1+0.5)-ny/2)/(ny/2) * (iz>0);  
             a_gz = -((iz-1+0.5)-nz/2)/(nz/2) * (iz>0);
+
+            if(arg.fatsat)
+                fatChemShift = 3.5;  % fat/water chemical shift (ppm)
+                fatFreq = arg.fatFreqSign*sys.gamma*1e4*sys.B0*fatChemShift*1e-6;  % Hz
+                toppe.write2loop('fatsat.mod', sys, ...
+                    'RFoffset', round(fatFreq), ...   % Hz
+                    'RFphase', rfphs);         % radians
+
+                rfphs = rfphs + (arg.rfSpoilSeed/180*pi)*rfSpoilSeed_cnt ;  % radians
+                rfSpoilSeed_cnt = rfSpoilSeed_cnt + 1;
+            end
 
             toppe.write2loop(arg.exMod, sys, ...
                 'RFamplitude', 1.0, ...
@@ -141,7 +143,6 @@ for iz = -1:nz     % We use iz<1 for approach to steady-state
                 'textra', max(DTE) - DTE(ite), ... % to keep TR constant
                 'slice', max(iz,1), 'echo', ite, 'view', iy);
 
-            % update rf/rec phase
             rfphs = rfphs + (arg.rfSpoilSeed/180*pi)*rfSpoilSeed_cnt ;  % radians
             rfSpoilSeed_cnt = rfSpoilSeed_cnt + 1;
         end
