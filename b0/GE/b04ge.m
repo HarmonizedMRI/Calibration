@@ -22,7 +22,7 @@ function b04ge(sys, N, FOV, flip, DTE, varargin)
 %  readoutMod   = 'readout.mod';
 %  nCyclesSpoil = 2;               % number of cycles of phase across voxel (along x and z)
 %  fatsat       = false;           % struct containing fat sat settings:
-%  fatFreqSign = +1;               %
+%  fatFreqSign = -1;               %
 
 % defaults
 arg.entryFile = 'toppeN.entry';
@@ -36,7 +36,7 @@ arg.exMod         = 'tipdown.mod';
 arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
 arg.fatsat       = false;         % add fat saturation pulse?
-arg.fatFreqSign = +1;            % sign of fatsat pulse frequency offset
+arg.fatFreqSign = -1;            % sign of fatsat pulse frequency offset
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
