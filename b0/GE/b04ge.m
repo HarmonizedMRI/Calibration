@@ -79,13 +79,12 @@ toppe.writeentryfile(arg.entryFile, ...
 
 % fat sat module
 fatsat.flip    = 90;
-fatsat.slThick = 1000;       % dummy value (determines slice-select gradient, but we won't use it; just needs to be large to reduce dead time before+after rf pulse)
-fatsat.tbw     = 2.0;        % time-bandwidth product
-fatsat.dur     = 4.5;        % pulse duration (ms)
-
-b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur, 1e-6, sys, ...
-    'type', 'ex', ...    % fatsat pulse is a 90 so is of type 'ex', not 'st' (small-tip)
-    'writeModFile', false);
+fatsat.slThick = 1e5;     % dummy value (determines slice-select gradient, but we won't use it). Just needs to be large to reduce dead time before+after rf pulse
+fatsat.tbw = 2;
+fatsat.bw = 440;   % Hz
+fatsat.dur = fatsat.tbw*1e3/fatsat.bw;
+b1 = toppe.utils.rf.makeslr(fatsat.flip, fatsat.slThick, fatsat.tbw, fatsat.dur, 1e-8, sys, ...
+                'ftype', 'min', 'type', 'ex', 'writeModFile', false);
 b1 = toppe.makeGElength(b1);
 toppe.writemod(sys, 'rf', b1, 'ofname', 'fatsat.mod', 'desc', 'fat sat pulse');
 
