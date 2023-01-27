@@ -37,6 +37,7 @@ arg.readoutMod    = 'readout.mod';
 arg.nCyclesSpoil = 2;   % number of cycles of phase across voxel (along x and z)
 arg.fatsat       = false;         % add fat saturation pulse?
 arg.fatFreqSign = -1;            % sign of fatsat pulse frequency offset
+arg.autoChop = false;            % If true, only acquire data on gradient plateau. See makegre.m
 
 % substitute with provided keyword arguments
 arg = toppe.utils.vararg_pair(arg, varargin);
@@ -100,6 +101,7 @@ toppe.writemod(sys, 'rf', b1, 'ofname', 'fatsat.mod', 'desc', 'fat sat pulse');
 % Reduce slew to keep PNS in normal mode (<80% of limit)
 toppe.utils.makegre(FOV(1), N(1), voxSize(3), sys, ... 
     'ofname', arg.readoutMod, ...
+    'autoChop', arg.autoChop, ...   
     'ncycles', arg.nCyclesSpoil); 
 
 
